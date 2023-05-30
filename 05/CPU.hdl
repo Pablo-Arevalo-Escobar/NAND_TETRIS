@@ -1,0 +1,162 @@
+// This file is part of www.nand2tetris.org
+// and the book "The Elements of Computing Systems"
+// by Nisan and Schocken, MIT Press.
+// File name: projects/05/CPU.hdl
+
+/**
+ * The Hack CPU (Central Processing unit), consisting of an ALU,
+ * two registers named A and D, and a program counter named PC.
+ * The CPU is designed to fetch and execute instructions written in 
+ * the Hack machine language. In particular, functions as follows:
+ * Executes the inputted instruction according to the Hack machine 
+ * language specification. The D and A in the language specification
+ * refer to CPU-resident registers, while M refers to the external
+ * memory location addressed by A, i.e. to Memory[A]. The inM input 
+ * holds the value of this location. If the current instruction needs 
+ * to write a value to M, the value is placed in outM, the address 
+ * of the target location is placed in the addressM output, and the 
+ * writeM control bit is asserted. (When writeM==0, any value may 
+ * appear in outM). The outM and writeM outputs are combinational: 
+ * they are affected instantaneously by the execution of the current 
+ * instruction. The addressM and pc outputs are clocked: although they 
+ * are affected by the execution of the current instruction, they commit 
+ * to their new values only in the next time step. If reset==1 then the 
+ * CPU jumps to address 0 (i.e. pc is set to 0 in next time step) rather 
+ * than to the address resulting from executing the current instruction. 
+ */
+
+CHIP CPU {
+
+    IN  inM[16],         // M value input  (M = contents of RAM[A])
+        instruction[16], // Instruction for execution
+        reset;           // Signals whether to re-start the current
+                         // program (reset==1) or continue executing
+                         // the current program (reset==0).
+
+    OUT outM[16],        // M value output
+        writeM,          // Write to M? 
+        addressM[15],    // Address in data memory (of M)
+        pc[15];          // address of next instruction
+
+    PARTS:
+	// Logic Flow:
+	// If instruction is an A instruction:
+	// 		Load the 16-bit constant that the instruction represents 
+	// 		into the A register
+	// If instruction is a C instruction:
+	//		Compute the operation specified by the instruction.
+	//		Store the result in the subset of {A,D,M} specified by
+	//	 	the instruction. 
+	//		If one of the registers is M, set writeM 1
+	
+	// To Do:
+	// Instruction Format:
+	//		ixxa 11-6cccccc ddd jjj
+	//		i - Instruction( 0 -> A , 1->C)
+	// 
+	
+	
+	
+	//Computing iBit 
+	Mux(a=true, b=false, sel=instruction[15], out = iBitA);
+	Not(in = iBitA, out = iBitC);
+	
+
+	
+	
+
+
+	//Use destination bit in instruction code to retrieve the destination
+	
+	//ALU
+	//Current issue is at the alu level. I need to implement how the ALU will decide which registers to use
+	//
+	
+	Mux16(a= D, b=D, sel=instruction[12], out = X);
+	Mux16(a= A, b=inM, sel=instruction[12], out = Y); 
+	ALU(x=X,y=Y,zx=instruction[11],nx=instruction[10],zy=instruction[9],
+			ny = instruction[8], f = instruction[7], no = instruction[6],
+			out = compOut, zr = compZr, ng = compNg);
+			
+
+				
+	DMux8Way(in=true,sel=instruction[3..5],
+				a=nullDest,b=mDest,
+				c=dDest,d=mdDest,
+				e=aDest, f=amDest ,
+				g=adDest , h=amdDest
+			);
+			
+	//Determine whether or not to store the output in M
+	Or(a=mDest, b=mdDest, out = mmdDest);
+	Or(a=mmdDest,b=amDest, out = mmdamDest);
+	Or(a=mmdamDest, b=amdDest, out = mToStore);
+	
+	//Determine whether or not to store the output in D
+	Or(a=dDest,b=mdDest, out = dmdDest);
+	Or(a=dmdDest,b=adDest, out = dmdadDest);
+	Or(a=dmdadDest,b=amdDest, out = dToStore);
+	
+	//Determine wheter or not to store the output in A
+	Or(a=aDest,b=amDest, out = aamDest);
+	Or(a=aamDest,b=adDest, out =aamadDest);
+	Or(a=aamadDest,b=amdDest, out = aToStore);
+	
+	//Nullify if iBitA
+	And(a=mToStore, b=iBitC, out = mStore);
+	And(a=dToStore, b=iBitC, out = dStore);
+	And(a=aToStore, b=iBitC, out = aStore);
+
+
+	//Determine A register mode:
+	Mux16(a=instruction, b=compOut, sel=iBitC, out = aVal);
+	Or(a = iBitA, b= aStore, out = aLoad);
+	
+	// Registers:
+	ARegister(in = aVal, load = aLoad , out = A);
+	DRegister(in = compOut  , load =dStore , out = D);
+	
+	
+	//Memory
+	And16(a=A,b=true, out[0..14] = aAddress);
+	Mux16(a=false,b=compOut,sel=mStore, out =outM);
+	//Memory(in=compOut , load=mStore , address = aAddress, out = outM);
+	And16(a=A,b=true,out[0..14]= addressM);
+	
+	//WriteM
+	Mux(a=false,b=true,sel=mStore, out=writeM);
+	
+	//Jump Instructions
+	DMux8Way(in=true,sel=instruction[0..2],
+				a=nullJump,b=JGT,
+				c=JEQ,d=JGE,
+				e=JLT, f=JNE ,
+				g=JLE , h=JMP
+			);
+
+	Not(in = compZr, out = compNonZr);
+	Not(in = compNg, out = compNonNg);
+	Or(a=compNg,b=compZr, out = compNgOrZr);
+	And(a= compNonZr, b= compNonNg, out = compNonZrPos);
+	And(a=compNg, b=compNonZr, out = compNonZrNg);
+	
+	
+	And(a=JGT, b=compNonZrPos, out = jumpJGT);
+	And(a=JEQ, b=compZr, out = jumpJEQ);
+	And(a=JGE, b=compNonNg, out= jumpJGE);
+	And(a=JLT, b=compNonZrNg, out = jumpJLT);
+	And(a=JNE, b=compNonZr, out = jumpJNE);
+	And(a=JLE, b=compNgOrZr, out = jumpJLE);
+	
+	Or(a=jumpJGT,b=jumpJEQ, out = jump2);
+	Or(a=jump2,b=jumpJGE, out = jump3);
+	Or(a=jump3,b=jumpJLT, out= jump4);
+	Or(a=jump4,b=jumpJNE, out= jump5);
+	Or(a=jump5,b=jumpJLE, out = jump6);
+	Or(a=jump6,b=JMP, out =jump7);
+	And(a=iBitC,b=jump7, out = jump);
+	
+	
+	//Program Counter
+	PC(in=A,load=jump,inc=true,reset=reset, out[0..14] = pc);
+}
