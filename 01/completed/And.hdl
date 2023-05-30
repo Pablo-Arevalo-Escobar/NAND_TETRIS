@@ -1,0 +1,9 @@
+//AND GATE IMPLEMENTATION USING NAND
+
+CHIP And {
+	IN a, b;
+	OUT out;
+	PARTS:
+	Nand(a=a,b=b,out = nandAB);
+	Nand(a=nandAB,b=nandAB, out = out);
+}
