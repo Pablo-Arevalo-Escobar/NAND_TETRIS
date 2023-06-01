@@ -66,7 +66,7 @@ std::string Parser::Symbol() {
     if(_CurrentCommand.find("@") != std::string::npos)
         return _CurrentCommand.substr(1);
     if (_CurrentCommand.find("(") != std::string::npos && _CurrentCommand.find(")") != std::string::npos)
-        return _CurrentCommand.substr(_CurrentCommand.find("(") + 1, _CurrentCommand.find(")"));
+        return _CurrentCommand.substr(_CurrentCommand.find("(") + 1, _CurrentCommand.find(")")-1);
 
     return _CurrentCommand;
 }
@@ -144,7 +144,8 @@ std::string Parser::ReadLine()
                 CurrentChar = _File.get();
             }
             CurrentChar = ' ';
-            continue;
+            if(NewLine.empty()) continue;
+            else break;
         }
         NewLine += CurrentChar;
     }
