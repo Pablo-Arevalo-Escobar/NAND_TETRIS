@@ -14,6 +14,7 @@ class Parser {
         std::string Dest();
         std::string Comp();
         std::string Jump();
+        void Reset();
 
     private:
         std::string ReadLine();

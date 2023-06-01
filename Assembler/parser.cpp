@@ -5,6 +5,7 @@
 
 
 
+
 Parser::Parser(const char* InputFilePath) {
     try {
         _File.open(InputFilePath);
@@ -49,8 +50,11 @@ ECommandType Parser::CommandType()
     if(_CurrentCommand.find('=') != std::string::npos || _CurrentCommand.find(';') != std::string::npos)
         return ECommandType::C_COMMAND;
 
-    //L_COMMAND FORMAT Xxx
-    return ECommandType::L_COMMAND;
+    //L_COMMAND FORMAT (Xxx)
+    if(_CurrentCommand[0] == '(' && _CurrentCommand[_CurrentCommand.size() - 1] == ')')
+        return ECommandType::L_COMMAND;
+    
+    return ECommandType::INVALID;
 }
 
 std::string Parser::Symbol() {
@@ -61,6 +65,9 @@ std::string Parser::Symbol() {
     }
     if(_CurrentCommand.find("@") != std::string::npos)
         return _CurrentCommand.substr(1);
+    if (_CurrentCommand.find("(") != std::string::npos && _CurrentCommand.find(")") != std::string::npos)
+        return _CurrentCommand.substr(_CurrentCommand.find("(") + 1, _CurrentCommand.find(")"));
+
     return _CurrentCommand;
 }
 
@@ -109,9 +116,15 @@ std::string Parser::Jump()
     size_t SemiColonPos = _CurrentCommand.find(";");
     std::string Jump = "Null";
     if (SemiColonPos != std::string::npos) {
-        Jump = _CurrentCommand.substr(SemiColonPos);
+        Jump = _CurrentCommand.substr(SemiColonPos+1);
     }
     return Jump;
+}
+
+void Parser::Reset()
+{
+    _File.clear();
+    _File.seekg(0,_File.beg);    
 }
 
 std::string Parser::ReadLine()
@@ -124,7 +137,7 @@ std::string Parser::ReadLine()
     char CurrentChar = ' ';
     while(CurrentChar != '\n' && !_File.eof()) {
         CurrentChar = _File.get();
-        if(CurrentChar == '\n') break;
+        if (CurrentChar == '\n') {break;}
         if(CurrentChar == ' ') continue;
         if(CurrentChar == '/') {
             while(CurrentChar != '\n' && !_File.eof()) {
