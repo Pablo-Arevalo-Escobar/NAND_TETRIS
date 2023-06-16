@@ -1,22 +1,43 @@
 #include <iostream>
+#include "VMParser.h"
+#include "VMCodeWriter.h"
+#include <fstream>
+
+
+static const char* InputFile = "SimpleAdd.vm";
+static const char* OutputFile = "SimpleAdd.asm";
 
 int main(int ArgCount, char* ArgValues[]) {
+    VMParser Parser(InputFile);
+    VMCodeWriter CodeWriter(OutputFile);
 
-    if (ArgCount > 1)
-        std::cout << "Hello File! " << ArgValues[1] << "\n";
-    else
-       std::cout << "Hello World!\n";
-    
-    std::string TestString = "push constant 17";
-    auto pos = TestString.find(' ');
-    std::string sub2 = TestString.substr(pos+1);
-    std::string sub21 = sub2.substr(0, sub2.find(' '));
-    std::string sub22 = sub2.substr(sub2.find(' '));
+    while (Parser.HasMoreLines()) {
+        Parser.Advance();
+        EVMCommandType CommandType = Parser.CommandType();
+        
+        switch (CommandType) {
+        case C_ARITHMETIC:
+            CodeWriter.WriteArithmetic(Parser.GetArg1().c_str());
+            break;
+        case C_PUSH:
+            CodeWriter.WritePushPop(C_PUSH, Parser.GetArg1().c_str(), Parser.GetArg2());
+            break;
+        case C_POP:
+            CodeWriter.WritePushPop(C_POP, Parser.GetArg1().c_str(), Parser.GetArg2());
+            break;
+        case INVALID:
+            break;
+        default:
+            std::cerr << "ERROR::COMMAND_TYPE_PROCESS_NOT_IMPLEMENTED_YET\n";
+        }
+    }
+    CodeWriter.Close();
+    Parser.Close();
+    std::cout << "File translated!\n";
+    //std::string _CurrentCommand = " push constant 7 ";
+    //std::string ArgSubString = _CurrentCommand.substr(_CurrentCommand.find(' ') + 1);
+    //std::cout <<  ArgSubString.substr(ArgSubString.find(' '));
 
-    std::cout << "String : " << TestString << "\n";
-    std::cout << "sub2 " << sub2 << "\n";
-    std::cout << "arg1 : " << sub21 << "\n";
-    std::cout << "arg2 : " << sub22 << "\n";
 
     return 1;
 }

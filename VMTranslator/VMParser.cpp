@@ -38,6 +38,10 @@ void VMParser::Advance()
     do {
         _CurrentCommand = ReadLine();
     } while (_CurrentCommand.empty() && !_File.eof());
+
+    #ifdef DEBUG
+        std::cout << "CURRENT COMMAND :" << _CurrentCommand << "\n";
+    #endif
 }
 
 EVMCommandType VMParser::CommandType()
@@ -60,7 +64,7 @@ EVMCommandType VMParser::CommandType()
     
 
 
-    return EVMCommandType();
+    return EVMCommandType::INVALID;
 }
 
 std::string VMParser::GetArg1()
@@ -87,13 +91,18 @@ int VMParser::GetArg2()
     std::string ArgSubString = _CurrentCommand.substr(_CurrentCommand.find(' ') + 1);
     int Result = -1;
     try {
-        ArgSubString.substr(ArgSubString.find(' '));
-        Result = std::stoi(ArgSubString);
+        Result = std::stoi(ArgSubString.substr(ArgSubString.find(' ')));
     }
     catch (const std::invalid_argument& e) {
         std::cerr << "VMPARSER::GETARG2::ARG2 - Invalid argument: " << e.what() << std::endl;
+        std::cerr << ArgSubString << " \n";
     }
     return Result;
+}
+
+void VMParser::Close()
+{
+    _File.close();
 }
 
 std::string VMParser::ReadLine()
@@ -107,7 +116,7 @@ std::string VMParser::ReadLine()
     while (CurrentChar != '\n' && !_File.eof()) {
         CurrentChar = _File.get();
         if (CurrentChar == '\n') { break; }
-        if (CurrentChar == ' ') continue;
+        if (CurrentChar == ' ' && NewLine.size() == 0) continue;
         if (CurrentChar == '/') {
             while (CurrentChar != '\n' && !_File.eof()) {
                 CurrentChar = _File.get();

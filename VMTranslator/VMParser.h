@@ -26,6 +26,7 @@ public:
     EVMCommandType CommandType();
     std::string GetArg1();
     int GetArg2();
+    void Close();
 private:
     std::string ReadLine();
 private:
