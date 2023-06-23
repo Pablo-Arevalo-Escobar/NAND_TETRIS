@@ -8,15 +8,20 @@ static std::map<std::string, std::string> _ArithmeticMap = {
     {"and","&"},{"or","|"},{"not","!"}
 };
 
-static std::unordered_set<std::string> _UnarySet = {
-    "neg", "not"
+static std::map<std::string, std::string> _JumpMap = {
+    {"eq","JEQ"}, {"gt","JGT"}, {"lt","JLT"}
+};
+
+static std::map<std::string,std::string> _UnaryMap = {
+    {"neg","-"}, {"not","!"}
 };
 
 
 static std::map<std::string, std::string> _SegmentMap = {
     {"temp","5"}, {"local","LCL"}, {"argument","ARG"},
-    {"this","THIS"}, {"that","THAT"}
+    {"this","THIS"}, {"that","THAT"}, {"reg","R14"}
 };
+
 
 
 VMCodeWriter::VMCodeWriter(const char* OutputFilePath)
@@ -49,7 +54,7 @@ void VMCodeWriter::WriteArithmetic(const char* Command)
     
     //Print a debug message to the file 
 
-    if (_ArithmeticMap.count(Command) == 0) {
+    if (_ArithmeticMap.count(Command) == 0 && _JumpMap.count(Command) == 0) {
         std::cerr << "VMCodeWrite::WriteArithmetic::INVALID COMMAND\n";
         return;
     }
@@ -60,39 +65,65 @@ void VMCodeWriter::WriteArithmetic(const char* Command)
     #endif
 
 
-    if (_UnarySet.count(Command) == 0) { // Binary Operators
+    if (_UnaryMap.count(Command) == 0) { // Binary Operators
             //Pop two elements from the stack
-            WritePushPop(EVMCommandType::C_POP, "temp", 0);
-            WritePushPop(EVMCommandType::C_POP, "temp", 1);
+            //temp register: 5 + i
+            WritePushPop(EVMCommandType::C_POP, "reg", 1); 
+            WritePushPop(EVMCommandType::C_POP, "reg", 0);
 
             //Perform the operation
-            //...
-            _OutputFile <<
-                "@6\n" <<
-                "D=M\n" <<
-                "@5\n" <<
-                "M = M" << _ArithmeticMap[Command] << "D\n";
+            if (_ArithmeticMap.count(Command) != 0) {
+                _OutputFile <<
+                    "@R15\n" <<
+                    "D=M\n" <<
+                    "@R14\n" <<
+                    "M = M" << _ArithmeticMap[Command] << "D\n";
+            }
 
-            //Push the result back to the stack
-            WritePushPop(EVMCommandType::C_PUSH, "temp", 0);
+            //Jump Command
+            else {
+                _OutputFile <<
+                    "@R15\n" <<
+                    "D=M\n" <<
+                    "@R14\n" <<
+                    "D = M-D\n" <<
+                    "(LOOP)\n" <<
+                    "M=-1\n" <<
+                    "@END" << _LoopCounter << "\n" <<
+                    "D;" << _JumpMap[Command] << "\n" <<
+                    "@R14\n" <<
+                    "M=0\n" <<
+                    "(END" << _LoopCounter << ")\n";
+                ++_LoopCounter;
+            }
     }
     else { // Unary Operators
-
+        WritePushPop(EVMCommandType::C_POP, "reg", 0);
+        _OutputFile <<
+            "@R14\n" <<
+            "D=" << _UnaryMap[Command] << "M\n" <<
+            "M=D\n";
     }
+
+
+    //Push the result back to the stack
+    WritePushPop(EVMCommandType::C_PUSH, "reg", 0);
 
     #ifdef DEBUG
         _OutputFile << "// END OF ARITHMETIC COMMAND: " << Command << "\n";
     #endif
 }
 
-void VMCodeWriter::WritePushPop(EVMCommandType Command, const char* Segment, int Index)
+void VMCodeWriter::WritePushPop(EVMCommandType Command, std::string Segment, int Index)
 {
-    #ifdef _DEBUG
+    #ifdef DEBUG
         std::cout << "Segment " << Segment << " Index " << Index << "\n";
+        _OutputFile << "// SEGMENT " << Segment << " INDEX " << Index << "\n";
     #endif
 
-    if (_SegmentMap.count(Segment) == 1) {
-        WriteDynamic(Command, Segment, Index);
+ 
+    if (_SegmentMap.count(Segment) == 1 || std::strcmp("pointer", Segment.c_str()) == 0) {
+        WriteDynamic(Command, Segment.c_str(), Index);
     }
     else {
         //Handle Pointer, Temp, Constant, and Static values
@@ -100,14 +131,16 @@ void VMCodeWriter::WritePushPop(EVMCommandType Command, const char* Segment, int
         case C_POP:
             break;
         case C_PUSH:
-            if (strcmp(Segment ,"constant") == 0) {
+            if (strcmp(Segment.c_str(), "constant") == 0) {
                 _OutputFile <<
                     "@" << Index << "\n" <<
                     "D=A\n" <<
                     "@SP\n" <<
-                    "M=M+1\n" <<
+                   // "M=M+1\n" <<
                     "A=M\n" <<
-                    "M=D\n";
+                    "M=D\n" <<
+                    "@SP\n" << 
+                    "M=M+1\n";
             }
             break;
         }
@@ -122,55 +155,82 @@ void VMCodeWriter::WritePushPop(EVMCommandType Command, const char* Segment, int
 }
 
 
-void VMCodeWriter::WriteDynamic(EVMCommandType Command, const char* Segment, int Index) {
+void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int Index) {
     
-    if (_SegmentMap.count(Segment) == 0) {
+    if (_SegmentMap.count(Segment) == 0 && std::strcmp(Segment.c_str(), "pointer") != 0) {
         std::cerr << "VMCodeWrite::WriteDynamic::INVALID_SEGMENT_COMMAND " << Segment << "\n";
         return;
     }
+
+    //This output works for registers which points to a location
+    std::string SegmentDest = (std::strcmp(Segment.c_str(), "this") == 0 || std::strcmp(Segment.c_str(), "that") == 0) ? "M" : "A";
+
+    if (std::strcmp(Segment.c_str(), "pointer") == 0) {
+        switch (Index) {
+        case 0:
+            Segment = "this";
+            break;
+        case 1:
+            Segment = "that";
+            Index = 0;
+            break;
+        default:
+            std::cerr << "VMCODEWRITER::WritePushPop::UNDEFINED INDEX FOR POINTER\n";
+        }
+    }
+
+    
     switch (Command) {
     case C_POP:
     #ifdef DEBUG
         std::cout << "DYNAMIC POP\n";
         _OutputFile << "// DYNAMIC POP COMMAND " << Segment << " " << Index << "\n";
     #endif
-    _OutputFile <<
-        "@" << _SegmentMap[Segment] << "\n" <<
-        "D = A\n" <<
-        "@" << Index << "\n" <<
-        "A = D + A\n" <<
-        "D = A\n" << // Store address [segment+index]
-        "@R13\n" << // Register - this may cause issues in the future 
-        "M=D\n" << // Store dest address in r13
-        "@SP\n" <<
-        "A=M\n" <<
-        "D=M\n" << // Retrieve value from the top of the stack
-        "@R13\n" <<
-        "A=M\n" << // Go to destination address
-        "M=D\n" << // Store top of stack value into dest address
-        "@SP\n" <<
-        "M=M-1\n";
+
+        
+        //This output only works for temp segments
+        _OutputFile <<
+            "@SP\n"
+            "M=M-1\n"
+            "@" << _SegmentMap[Segment] << "\n" <<
+            "D =" << SegmentDest << "\n" <<
+            "@" << Index << "\n" <<
+            "A = D + A\n" <<
+            "D = A\n" << // Store address [segment+index]
+            "@R13\n" << // Register - this may cause issues in the future 
+            "M=D\n" << // Store dest address in r13
+            "@SP\n" <<
+            "A=M\n" <<
+            "D=M\n" << // Retrieve value from the top of the stack
+            "@R13\n" <<
+            "A=M\n" << // Go to destination address
+            "M=D\n"; // Store top of stack value into dest address
     break;
 
     case C_PUSH:
     #ifdef DEBUG
         _OutputFile << "// DYNAMIC PUSH COMMAND " << Segment << " " << Index << "\n";
     #endif
-    _OutputFile <<
-        "@SP\n" << // Access stack pointer
-        "M = M+1\n" << // Increment pointer Value
-        "@" << Segment << "\n" << // Access segment
-        "D = A\n" << // Store segment address
-        "@" << Index << "\n" << // Access index
-        "A = D+A\n" << // Increment index value By segment value and go to that address
-        "D = M\n" << // Store the value in that  address to the data register
-        "@SP\n" << // Access stack pointer
-        "A = M\n" << // Go to top of stack
-        "M = D\n";                // Store data register value into top of stack
+        //This output works for registers which points to a location
+
+        //This output only works for temp segments
+        _OutputFile <<
+            "@" << _SegmentMap[Segment] << "\n" << // Access segment
+            "D =" << SegmentDest << "\n" << // Store segment address
+            "@" << Index << "\n" << // Access index
+            "A = D+A\n" << // Increment index value By segment value and go to that address
+            "D = M\n" << // Store the value in that  address to the data register
+            "@SP\n" << // Access stack pointer
+            "A = M\n" << // Go to top of stack
+            "M = D\n" <<                // Store data register value into top of stack
+            "@SP\n" <<
+            "M = M+1";
     break;
 
     }
 }
+
+
 
 
 
@@ -182,4 +242,6 @@ void VMCodeWriter::WriteDynamic(EVMCommandType Command, const char* Segment, int
 void VMCodeWriter::Close()
 {
     _OutputFile.close();
+    _LoopCounter = 0;
 }
+
