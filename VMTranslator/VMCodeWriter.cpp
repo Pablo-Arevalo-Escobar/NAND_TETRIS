@@ -2,6 +2,7 @@
 #include <map>
 #include <unordered_set>
 #include <iostream>
+#include <sstream>
 
 static std::map<std::string, std::string> _ArithmeticMap = {
     {"add","+"},{"sub","-"},{"neg","-"},
@@ -19,7 +20,8 @@ static std::map<std::string,std::string> _UnaryMap = {
 
 static std::map<std::string, std::string> _SegmentMap = {
     {"temp","5"}, {"local","LCL"}, {"argument","ARG"},
-    {"this","THIS"}, {"that","THAT"}, {"reg","R14"}
+    {"this","THIS"}, {"that","THAT"}, {"reg","R14"}, 
+    {"static","INDF"}, {"pointer", "INDF"}// Undefined
 };
 
 
@@ -122,28 +124,21 @@ void VMCodeWriter::WritePushPop(EVMCommandType Command, std::string Segment, int
     #endif
 
  
-    if (_SegmentMap.count(Segment) == 1 || std::strcmp("pointer", Segment.c_str()) == 0) {
+    if (_SegmentMap.count(Segment) == 1)
+    {
         WriteDynamic(Command, Segment.c_str(), Index);
     }
-    else {
-        //Handle Pointer, Temp, Constant, and Static values
-        switch (Command) {
-        case C_POP:
-            break;
-        case C_PUSH:
-            if (strcmp(Segment.c_str(), "constant") == 0) {
-                _OutputFile <<
-                    "@" << Index << "\n" <<
-                    "D=A\n" <<
-                    "@SP\n" <<
-                   // "M=M+1\n" <<
-                    "A=M\n" <<
-                    "M=D\n" <<
-                    "@SP\n" << 
-                    "M=M+1\n";
-            }
-            break;
-        }
+    else if (strcmp(Segment.c_str(), "constant") == 0) {
+        //Handle Constant Push values
+        _OutputFile <<
+            "@" << Index << "\n" <<
+            "D=A\n" <<
+            "@SP\n" <<
+            // "M=M+1\n" <<
+            "A=M\n" <<
+            "M=D\n" <<
+            "@SP\n" <<
+            "M=M+1\n";
         
     }
 
@@ -157,7 +152,7 @@ void VMCodeWriter::WritePushPop(EVMCommandType Command, std::string Segment, int
 
 void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int Index) {
     
-    if (_SegmentMap.count(Segment) == 0 && std::strcmp(Segment.c_str(), "pointer") != 0) {
+    if (_SegmentMap.count(Segment) == 0) {
         std::cerr << "VMCodeWrite::WriteDynamic::INVALID_SEGMENT_COMMAND " << Segment << "\n";
         return;
     }
@@ -177,6 +172,22 @@ void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int
         default:
             std::cerr << "VMCODEWRITER::WritePushPop::UNDEFINED INDEX FOR POINTER\n";
         }
+    }
+
+    else if (std::strcmp(Segment.c_str(), "static") == 0) {
+        std::stringstream StringStream;
+        StringStream << Segment.c_str() << Index;
+        std::string StaticID = StringStream.str();
+
+        if (_SegmentMap.count(StaticID) == 0) {
+            if (_StaticCounter > 240) {
+                std::cerr << "VMCODEWRITER::WriteDynamic::_StaticCounter Out Of Range -- Too Many Static Variables!!";
+            }
+            _SegmentMap[StaticID] = std::to_string(_StaticCounter++);
+        }
+        Segment = StaticID;
+        Index = 0;
+
     }
 
     
@@ -243,5 +254,6 @@ void VMCodeWriter::Close()
 {
     _OutputFile.close();
     _LoopCounter = 0;
+    _StaticCounter = 16;
 }
 

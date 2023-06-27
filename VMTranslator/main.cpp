@@ -11,7 +11,7 @@ std::pair<const char*, const char*> Files[] =
     {"PointerTest.vm", "PointerTest.asm"},
     {"PointerTestCopy.vm", "PointerTestCopy.asm"},
 
-    //{"StaticTest.vm", "StaticTest.asm"},
+    {"StaticTest.vm", "StaticTest.asm"},
 };
 void ProcessFile(const char* InputFile, const char* OutputFile);
 

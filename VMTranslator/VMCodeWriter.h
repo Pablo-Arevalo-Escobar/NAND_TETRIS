@@ -1,5 +1,6 @@
 #pragma once
 #include "VMParser.h"
+#include <map>
 
 class VMCodeWriter
 {
@@ -10,7 +11,9 @@ public:
     void Close();
 private:
     void WriteDynamic(EVMCommandType Command,std::string Segment, int Index);
+private:
     std::ofstream _OutputFile;
+    int _StaticCounter = 16;
     int _LoopCounter = 0;
 };
 
