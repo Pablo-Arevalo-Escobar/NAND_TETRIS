@@ -46,22 +46,39 @@ void VMParser::Advance()
 
 EVMCommandType VMParser::CommandType()
 {
+
+    //TODO::REFACTOR INTO HASHMAP TO PREVENT TIME WASTED ON STRING LOOKUP
     if (_CurrentCommand.empty()) {
         std::cerr << "PARSER::CommandType::NO_CURRENT_COMMAND" << std::endl;
         return EVMCommandType::INVALID;
     }
 
+
     //A faster alternative is to extract the first word of the line and use a hashmap to find the command type
     if (_CurrentCommand.find("push") != std::string::npos)
         return EVMCommandType::C_PUSH;
-    else if (_CurrentCommand.find("pop") != std::string::npos)
+    if (_CurrentCommand.find("pop") != std::string::npos)
         return EVMCommandType::C_POP;
+    if (_CurrentCommand.find("label") != std::string::npos)
+        return EVMCommandType::C_LABEL;
+    if (_CurrentCommand.find("if") != std::string::npos)
+        return EVMCommandType::C_IF;
+    if (_CurrentCommand.find("goto") != std::string::npos)
+        return EVMCommandType::C_GOTO;
+    if (_CurrentCommand.find("function") != std::string::npos)
+        return EVMCommandType::C_FUNCTION;
+    if (_CurrentCommand.find("call") != std::string::npos)
+        return EVMCommandType::C_CALL;
+    if (_CurrentCommand.find("return") != std::string::npos)
+        return EVMCommandType::C_RETURN;
+
 
     for (std::string ArithmeticCommand : _ArithmeticCommands) {
         if (_CurrentCommand.find(ArithmeticCommand) != std::string::npos)
             return EVMCommandType::C_ARITHMETIC;
     }
-    
+
+
 
 
     return EVMCommandType::INVALID;

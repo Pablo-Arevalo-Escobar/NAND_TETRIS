@@ -24,6 +24,10 @@ static std::map<std::string, std::string> _SegmentMap = {
     {"static","INDF"}, {"pointer", "INDF"}// Undefined
 };
 
+static std::map<std::string, int> _LabelMap = {
+
+};
+
 
 
 VMCodeWriter::VMCodeWriter(const char* OutputFilePath)
@@ -38,6 +42,25 @@ VMCodeWriter::VMCodeWriter(const char* OutputFilePath)
         "D=A\n" <<
         "@SP\n" <<
         "M = D\n";
+}
+
+VMCodeWriter::VMCodeWriter(const char* OutputFilePath, bool BSysInit)
+{
+    _OutputFile = std::ofstream(OutputFilePath);
+    if (!_OutputFile) {
+        std::cerr << "Error creating file!" << std::endl;
+        return;
+    }
+    _OutputFile <<
+        "@256\n" <<
+        "D=A\n" <<
+        "@SP\n" <<
+        "M = D\n";
+
+    PushFrame("StartPoint", 0);
+    WriteGoTo("Sys.init");
+    WriteLabel("StartPoint");
+
 }
 
 void VMCodeWriter::WriteArithmetic(const char* Command)
@@ -90,7 +113,7 @@ void VMCodeWriter::WriteArithmetic(const char* Command)
                     "@R14\n" <<
                     "D = M-D\n" <<
                     "(LOOP)\n" <<
-                    "M=-1\n" <<
+                    "M=1\n" <<
                     "@END" << _LoopCounter << "\n" <<
                     "D;" << _JumpMap[Command] << "\n" <<
                     "@R14\n" <<
@@ -149,6 +172,269 @@ void VMCodeWriter::WritePushPop(EVMCommandType Command, std::string Segment, int
     
 }
 
+void VMCodeWriter::SetFileName(std::string FileName)
+{
+    _FileName = FileName;
+}
+
+void VMCodeWriter::WriteLabel(std::string Label)
+{
+    #ifdef DEBUG
+        std::cout << "WriteLabel: " << Label << '\n';
+        _OutputFile << "// Write Label " << Label << '\n';
+    #endif
+
+    //TODO: Implement error checking for label format
+    _OutputFile << '(' << Label << ")\n";
+
+    #ifdef DEBUG
+        _OutputFile << "// END OF WriteLabel COMMAND\n";
+    #endif
+}
+
+void VMCodeWriter::WriteGoTo(std::string GoToLabel)
+{
+    #ifdef DEBUG
+        std::cout << "WriteGoToLabel: " << GoToLabel << '\n';
+        _OutputFile << "// Write GoToLabel " << GoToLabel << '\n';
+    #endif
+
+    _OutputFile << '@' << GoToLabel << '\n';
+    _OutputFile << "0;JMP\n";
+
+    #ifdef DEBUG
+            _OutputFile << "// END OF WriteGoToLabel COMMAND\n";
+    #endif
+}
+
+void VMCodeWriter::WriteIf(std::string IfGoToLabel)
+{
+
+    #ifdef DEBUG
+        std::cout << "WriteGoToLabel: " << IfGoToLabel << '\n';
+        _OutputFile << "// Write IfGoToLabel " << IfGoToLabel << '\n';
+    #endif
+
+    //Pop top stack value into @R14
+    WritePushPop(EVMCommandType::C_POP, "reg", 0);
+    _OutputFile << "@R14\n";
+    _OutputFile << "D=M\n";
+    _OutputFile << '@' << IfGoToLabel << '\n';
+    _OutputFile << "D;JGT\n";
+
+    #ifdef DEBUG
+        _OutputFile << "// END OF WriteIfGoToLabel COMMAND\n";
+    #endif
+
+}
+
+void VMCodeWriter::WriteFunction(std::string FuncName, int NumOfParams)
+{
+#ifdef DEBUG
+    std::cout << "WriteFunction: " << FuncName  << " " << NumOfParams  << '\n';
+    _OutputFile << "// WriteFunction " << FuncName << " " << NumOfParams << '\n';
+#endif
+    WriteLabel(FuncName);
+    for (int i = 0; i < NumOfParams; ++i) {
+        WritePushPop(C_PUSH, "constant", 0);
+    }
+
+#ifdef DEBUG
+    _OutputFile << "// END OF WriteFunction COMMAND\n";
+#endif
+    
+}
+
+void VMCodeWriter::PushFrame(std::string Label, int NumOfArgs) {
+    //Push the Label(return address) onto the stack
+    //TODO: Not good to have this stack behaviour in this function
+    // Should be translated to something around WritePushPop(C_PUSH, Label:NAME,0);
+    _OutputFile <<
+        "@" << Label << "\n" <<
+        "D=A\n" <<
+        "@SP\n" <<
+        "A=M\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "M=M+1\n";
+
+    //WritePushPop(EVMCommandType::C_PUSH, "local", 0);
+    _OutputFile <<
+        "@LCL\n" <<
+        "D=M\n" <<
+        "@SP\n" <<
+        // "M=M+1\n" <<
+        "A=M\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "M=M+1\n";
+
+    //WritePushPop(EVMCommandType::C_PUSH, "argument", 0);
+    _OutputFile <<
+        "@ARG\n" <<
+        "D=M\n" <<
+        "@SP\n" <<
+        // "M=M+1\n" <<
+        "A=M\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "M=M+1\n";
+
+
+    //WritePushPop(EVMCommandType::C_PUSH, "this", 0);
+    _OutputFile <<
+        "@THIS\n" <<
+        "D=M\n" <<
+        "@SP\n" <<
+        // "M=M+1\n" <<
+        "A=M\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "M=M+1\n";
+    //WritePushPop(EVMCommandType::C_PUSH, "that", 0);
+    _OutputFile <<
+        "@THAT\n" <<
+        "D=M\n" <<
+        "@SP\n" <<
+        // "M=M+1\n" <<
+        "A=M\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "M=M+1\n";
+
+
+    _OutputFile <<
+        "@SP\n" <<
+        "D=M\n" <<
+        "@5\n" <<
+        "D=D-A\n" <<
+        "@" << NumOfArgs << "\n" <<
+        "D=D-A\n" <<
+        "@ARG\n" <<
+        "M=D\n" <<
+        "@SP\n" <<
+        "D=M\n" <<
+        "@LCL\n" <<
+        "M = D\n";
+}
+
+void VMCodeWriter::WriteCall(std::string FuncName, int NumOfArgs)
+{
+
+#ifdef DEBUG
+    std::cout << "WriteCall: " << FuncName << " " << NumOfArgs << '\n';
+    _OutputFile << "// WriteCall  " << FuncName << " " << NumOfArgs << '\n';
+#endif
+
+    //Unique Return Label
+    int InstanceNum = 0;
+    std::string Label = _FileName + '.' + FuncName + "$ret." + std::to_string(InstanceNum);
+    if (_LabelMap.count(Label) != 0) {
+        InstanceNum = _LabelMap[Label];
+        Label = _FileName + '.'  + FuncName + "$ret." + std::to_string(InstanceNum);
+        ++_LabelMap[Label];
+    }
+    else {
+        _LabelMap[Label] = 1;
+    }
+
+    PushFrame(Label, NumOfArgs);
+    WriteGoTo(FuncName);
+    WriteLabel(Label);
+
+#ifdef DEBUG
+    _OutputFile << "// END OF WriteCall COMMAND\n";
+#endif
+}
+
+//TODO:: The core issue with the function stack is in this function.
+// Fix asap
+void VMCodeWriter::WriteReturn()
+{
+#ifdef DEBUG
+    std::cout << "WriteReturn: "  << '\n';
+    _OutputFile << "// WriteReturn \n";
+#endif
+    // Get the frame info
+
+    //Store return address 
+
+    _OutputFile
+        << "@5\n"
+        << "D=A\n"
+        << "@LCL\n"
+        << "A=M-D\n" // get return address, address
+        << "D=M\n" // go to return address, address
+        << "@R14\n"
+        << "M = D\n"; // store return address value in a temp register
+
+    //Reposition return value
+    // Pops a value of the stack and sets the value of *ARG to it
+    _OutputFile <<
+        "@SP\n" <<
+        "M=M-1\n" <<
+        "A=M\n" <<
+        "D=M\n" <<
+        "@ARG\n" <<
+        "A=M\n" <<
+        "M=D\n";
+
+
+
+    //Reposition stack pointer
+    _OutputFile << "@ARG\n";
+    _OutputFile << "D = M+1\n";
+    _OutputFile << "@SP\n";
+    _OutputFile << "M = D\n";
+
+    //Restore THAT value for caller
+    _OutputFile << "@LCL\n";
+    _OutputFile << "A=M-1\n";
+    _OutputFile << "D=M\n";
+    _OutputFile << "@THAT\n";
+    _OutputFile << "M = D\n";
+
+    //Restore THIS value for caller
+
+    _OutputFile 
+    << "@2\n"
+    << "D=A\n"
+    << "@LCL\n"
+    << "A=M-D\n"
+    << "D=M\n"
+    << "@THIS\n"
+    << "M = D\n";
+
+    //Restore ARG value for caller
+    _OutputFile 
+    << "@3\n"
+    << "D=A\n"
+    << "@LCL\n"
+    << "A=M-D\n"
+    << "D=M\n"
+    << "@ARG\n"
+    << "M = D\n";
+
+    //Restore LCL value for caller
+    _OutputFile 
+    << "@4\n"
+    << "D=A\n"
+    << "@LCL\n"
+    << "A=M-D\n"
+    << "D=M\n"
+    << "@LCL\n"
+    << "M = D\n";
+
+    //Go To Return Address
+    _OutputFile << "@R14\n"
+    << "A=M\n"
+    << "0;JMP\n";
+
+#ifdef DEBUG
+    _OutputFile << "// END OF WriteReturn COMMAND\n";
+#endif
+}
+
 
 void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int Index) {
     
@@ -158,7 +444,8 @@ void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int
     }
 
     //This output works for registers which points to a location
-    std::string SegmentDest = (std::strcmp(Segment.c_str(), "this") == 0 || std::strcmp(Segment.c_str(), "that") == 0) ? "M" : "A";
+    std::string SegmentDest = (std::strcmp(Segment.c_str(), "this") == 0 || std::strcmp(Segment.c_str(), "that") == 0
+                                || std::strcmp(Segment.c_str(), "argument") == 0 || std::strcmp(Segment.c_str(), "local") == 0) ? "M" : "A";
 
     if (std::strcmp(Segment.c_str(), "pointer") == 0) {
         switch (Index) {
@@ -176,14 +463,14 @@ void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int
 
     else if (std::strcmp(Segment.c_str(), "static") == 0) {
         std::stringstream StringStream;
-        StringStream << Segment.c_str() << Index;
+        StringStream << _FileName << '.' << Segment.c_str() << '.' << Index;
         std::string StaticID = StringStream.str();
 
         if (_SegmentMap.count(StaticID) == 0) {
             if (_StaticCounter > 240) {
                 std::cerr << "VMCODEWRITER::WriteDynamic::_StaticCounter Out Of Range -- Too Many Static Variables!!";
             }
-            _SegmentMap[StaticID] = std::to_string(_StaticCounter++);
+            _SegmentMap[StaticID] = _FileName + '.' +  std::to_string(_StaticCounter++);
         }
         Segment = StaticID;
         Index = 0;
@@ -235,7 +522,7 @@ void VMCodeWriter::WriteDynamic(EVMCommandType Command, std::string Segment, int
             "A = M\n" << // Go to top of stack
             "M = D\n" <<                // Store data register value into top of stack
             "@SP\n" <<
-            "M = M+1";
+            "M = M+1\n";
     break;
 
     }
